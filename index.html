@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Rodeo Duel - Father vs Son</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <!-- Title Screen -->
+    <div id="title-screen" class="screen active">
+        <div class="title-content">
+            <h1>🤠 RODEO DUEL 🤠</h1>
+            <h2>Father vs Son</h2>
+            <div class="characters-preview">
+                <div class="character-preview dad">
+                    <div class="character-icon">👨</div>
+                    <span>Pa</span>
+                </div>
+                <div class="vs">VS</div>
+                <div class="character-preview son">
+                    <div class="character-icon">👦</div>
+                    <span>Junior</span>
+                </div>
+            </div>
+            <p class="tagline">Who's the best cowboy in the family?</p>
+            <button id="start-btn" class="btn-primary">START DUEL</button>
+            <p class="instructions-hint">Tap & hold to spin your lasso, release to throw!</p>
+        </div>
+    </div>
+
+    <!-- Game Screen -->
+    <div id="game-screen" class="screen">
+        <div id="game-header">
+            <div class="player-score dad-score">
+                <span class="player-name">👨 Pa</span>
+                <span class="score" id="dad-score">0</span>
+            </div>
+            <div class="round-info">
+                <span id="round-display">Round 1</span>
+                <span class="first-to">First to 3</span>
+            </div>
+            <div class="player-score son-score">
+                <span class="player-name">Junior 👦</span>
+                <span class="score" id="son-score">0</span>
+            </div>
+        </div>
+
+        <canvas id="game-canvas"></canvas>
+
+        <div id="game-controls">
+            <div class="control-zone dad-zone" id="dad-control">
+                <div class="power-meter" id="dad-power">
+                    <div class="power-fill"></div>
+                </div>
+                <span>HOLD TO LASSO</span>
+            </div>
+            <div class="control-zone son-zone" id="son-control">
+                <div class="power-meter" id="son-power">
+                    <div class="power-fill"></div>
+                </div>
+                <span>HOLD TO LASSO</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Round Result Screen -->
+    <div id="round-screen" class="screen">
+        <div class="round-content">
+            <h2 id="round-winner">Pa wins the round!</h2>
+            <div class="score-display">
+                <div class="mini-score">👨 <span id="round-dad-score">1</span></div>
+                <div class="mini-score"><span id="round-son-score">0</span> 👦</div>
+            </div>
+            <button id="next-round-btn" class="btn-primary">Next Round</button>
+        </div>
+    </div>
+
+    <!-- Victory Screen -->
+    <div id="victory-screen" class="screen">
+        <div class="victory-content">
+            <h1 id="winner-text">🏆 PA WINS! 🏆</h1>
+            <div class="winner-character" id="winner-icon">👨</div>
+            <p id="winner-subtitle">The old man's still got it!</p>
+            <div class="final-score">
+                <span>Final Score: <span id="final-dad">3</span> - <span id="final-son">1</span></span>
+            </div>
+            <button id="rematch-btn" class="btn-primary">REMATCH</button>
+            <button id="menu-btn" class="btn-secondary">Main Menu</button>
+        </div>
+    </div>
+
+    <!-- Countdown Overlay -->
+    <div id="countdown-overlay" class="overlay">
+        <span id="countdown-text">3</span>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
