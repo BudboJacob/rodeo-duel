@@ -2,9 +2,10 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, maximum-scale=1.0, minimum-scale=1.0">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#8B4513">
     <title>Rodeo Duel - Father vs Son</title>
     <link rel="stylesheet" href="styles.css">
 </head>
@@ -12,56 +13,84 @@
     <!-- Title Screen -->
     <div id="title-screen" class="screen active">
         <div class="title-content">
-            <h1>🤠 RODEO DUEL 🤠</h1>
-            <h2>Father vs Son</h2>
+            <div class="logo-area">
+                <div class="cowboy-hat">🤠</div>
+                <h1>RODEO DUEL</h1>
+                <h2>Father vs Son</h2>
+            </div>
             <div class="characters-preview">
                 <div class="character-preview dad">
                     <div class="character-icon">👨</div>
-                    <span>Pa</span>
+                    <span>PA</span>
                 </div>
-                <div class="vs">VS</div>
+                <div class="vs-badge">VS</div>
                 <div class="character-preview son">
                     <div class="character-icon">👦</div>
-                    <span>Junior</span>
+                    <span>JUNIOR</span>
                 </div>
             </div>
             <p class="tagline">Who's the best cowboy in the family?</p>
-            <button id="start-btn" class="btn-primary">START DUEL</button>
-            <p class="instructions-hint">Tap & hold to spin your lasso, release to throw!</p>
+            <button id="start-btn" class="btn-primary pulse">🤠 START DUEL 🤠</button>
+            <div class="how-to-play">
+                <p><strong>HOW TO PLAY:</strong></p>
+                <p>👆 HOLD your zone to charge your lasso</p>
+                <p>🎯 RELEASE to throw at the bull!</p>
+                <p>🏆 First to catch 3 bulls wins!</p>
+            </div>
         </div>
     </div>
 
     <!-- Game Screen -->
     <div id="game-screen" class="screen">
         <div id="game-header">
-            <div class="player-score dad-score">
-                <span class="player-name">👨 Pa</span>
-                <span class="score" id="dad-score">0</span>
+            <div class="player-hud dad-hud">
+                <div class="player-avatar">👨</div>
+                <div class="player-info">
+                    <span class="player-name">PA</span>
+                    <div class="score-stars" id="dad-stars">☆☆☆</div>
+                </div>
             </div>
-            <div class="round-info">
-                <span id="round-display">Round 1</span>
-                <span class="first-to">First to 3</span>
+            <div class="round-badge">
+                <span id="round-display">ROUND 1</span>
             </div>
-            <div class="player-score son-score">
-                <span class="player-name">Junior 👦</span>
-                <span class="score" id="son-score">0</span>
+            <div class="player-hud son-hud">
+                <div class="player-info">
+                    <span class="player-name">JUNIOR</span>
+                    <div class="score-stars" id="son-stars">☆☆☆</div>
+                </div>
+                <div class="player-avatar">👦</div>
             </div>
         </div>
 
-        <canvas id="game-canvas"></canvas>
+        <div id="game-arena">
+            <canvas id="game-canvas"></canvas>
+            <div id="catch-effect" class="catch-effect hidden"></div>
+        </div>
 
         <div id="game-controls">
             <div class="control-zone dad-zone" id="dad-control">
-                <div class="power-meter" id="dad-power">
-                    <div class="power-fill"></div>
+                <div class="zone-content">
+                    <div class="power-ring" id="dad-ring">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="ring-bg" cx="50" cy="50" r="45"/>
+                            <circle class="ring-fill" cx="50" cy="50" r="45" id="dad-ring-fill"/>
+                        </svg>
+                        <span class="lasso-icon">🪢</span>
+                    </div>
+                    <span class="zone-label">PA's LASSO</span>
                 </div>
-                <span>HOLD TO LASSO</span>
             </div>
             <div class="control-zone son-zone" id="son-control">
-                <div class="power-meter" id="son-power">
-                    <div class="power-fill"></div>
+                <div class="zone-content">
+                    <div class="power-ring" id="son-ring">
+                        <svg viewBox="0 0 100 100">
+                            <circle class="ring-bg" cx="50" cy="50" r="45"/>
+                            <circle class="ring-fill" cx="50" cy="50" r="45" id="son-ring-fill"/>
+                        </svg>
+                        <span class="lasso-icon">🪢</span>
+                    </div>
+                    <span class="zone-label">JUNIOR's LASSO</span>
                 </div>
-                <span>HOLD TO LASSO</span>
             </div>
         </div>
     </div>
@@ -69,32 +98,66 @@
     <!-- Round Result Screen -->
     <div id="round-screen" class="screen">
         <div class="round-content">
-            <h2 id="round-winner">Pa wins the round!</h2>
+            <div class="round-result-icon" id="round-result-icon">🐂</div>
+            <h2 id="round-winner">PA catches the bull!</h2>
             <div class="score-display">
-                <div class="mini-score">👨 <span id="round-dad-score">1</span></div>
-                <div class="mini-score"><span id="round-son-score">0</span> 👦</div>
+                <div class="score-card dad-card">
+                    <span class="score-emoji">👨</span>
+                    <span class="score-name">PA</span>
+                    <span class="score-value" id="round-dad-score">0</span>
+                </div>
+                <div class="score-divider">-</div>
+                <div class="score-card son-card">
+                    <span class="score-value" id="round-son-score">0</span>
+                    <span class="score-name">JUNIOR</span>
+                    <span class="score-emoji">👦</span>
+                </div>
             </div>
-            <button id="next-round-btn" class="btn-primary">Next Round</button>
+            <button id="next-round-btn" class="btn-primary">NEXT ROUND →</button>
         </div>
     </div>
 
     <!-- Victory Screen -->
     <div id="victory-screen" class="screen">
         <div class="victory-content">
-            <h1 id="winner-text">🏆 PA WINS! 🏆</h1>
+            <div class="confetti-container" id="confetti"></div>
+            <div class="trophy-icon">🏆</div>
+            <h1 id="winner-text">PA WINS!</h1>
             <div class="winner-character" id="winner-icon">👨</div>
             <p id="winner-subtitle">The old man's still got it!</p>
             <div class="final-score">
-                <span>Final Score: <span id="final-dad">3</span> - <span id="final-son">1</span></span>
+                <span id="final-dad">3</span> - <span id="final-son">0</span>
             </div>
-            <button id="rematch-btn" class="btn-primary">REMATCH</button>
-            <button id="menu-btn" class="btn-secondary">Main Menu</button>
+            <button id="rematch-btn" class="btn-primary">🔄 REMATCH</button>
+            <button id="menu-btn" class="btn-secondary">🏠 MAIN MENU</button>
         </div>
     </div>
 
     <!-- Countdown Overlay -->
     <div id="countdown-overlay" class="overlay">
-        <span id="countdown-text">3</span>
+        <div class="countdown-content">
+            <span id="countdown-text">3</span>
+        </div>
+    </div>
+
+    <!-- Tutorial Overlay (first time) -->
+    <div id="tutorial-overlay" class="overlay">
+        <div class="tutorial-content">
+            <h2>🤠 GET READY! 🤠</h2>
+            <div class="tutorial-step">
+                <div class="tutorial-icon">👇</div>
+                <p>Hold your control zone to charge</p>
+            </div>
+            <div class="tutorial-step">
+                <div class="tutorial-icon">🪢</div>
+                <p>Release to throw your lasso</p>
+            </div>
+            <div class="tutorial-step">
+                <div class="tutorial-icon">🐂</div>
+                <p>Catch the running bull!</p>
+            </div>
+            <button id="tutorial-ok" class="btn-primary">GOT IT!</button>
+        </div>
     </div>
 
     <script src="game.js"></script>
