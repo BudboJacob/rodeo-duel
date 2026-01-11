@@ -1,0 +1,25 @@
+{
+  "name": "rodeo-duel",
+  "version": "2.0.0",
+  "description": "Father vs Son Lasso Showdown - Mobile game with Angry Birds-style aiming and multiplayer",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.14.2"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "game",
+    "multiplayer",
+    "websocket",
+    "mobile",
+    "rodeo"
+  ],
+  "author": "",
+  "license": "MIT"
+}

@@ -1,14 +1,21 @@
 // ============================================
 // RODEO DUEL - Father vs Son Lasso Showdown
+// With Angry Birds-style aiming & Multiplayer
 // ============================================
 
-// Wait for DOM
 document.addEventListener('DOMContentLoaded', init);
 
 // Canvas setup
 let canvas, ctx;
 let canvasWidth = 0;
 let canvasHeight = 0;
+
+// Multiplayer
+let socket = null;
+let isMultiplayer = false;
+let playerId = null;
+let roomId = null;
+let opponentConnected = false;
 
 // Game State
 const game = {
@@ -21,6 +28,7 @@ const game = {
     countdownValue: 3,
     firstPlay: true,
     animationFrame: null,
+    mode: 'local', // 'local' or 'online'
 };
 
 // Players
@@ -32,9 +40,12 @@ const players = {
         lightColor: '#D2691E',
         x: 0,
         y: 0,
-        power: 0,
-        isCharging: false,
-        chargeStart: 0,
+        // Angry Birds style aiming
+        isDragging: false,
+        dragStart: { x: 0, y: 0 },
+        dragCurrent: { x: 0, y: 0 },
+        aimAngle: 0,
+        aimPower: 0,
         lasso: null,
         hasThrown: false,
     },
@@ -45,9 +56,11 @@ const players = {
         lightColor: '#60A5FA',
         x: 0,
         y: 0,
-        power: 0,
-        isCharging: false,
-        chargeStart: 0,
+        isDragging: false,
+        dragStart: { x: 0, y: 0 },
+        dragCurrent: { x: 0, y: 0 },
+        aimAngle: 0,
+        aimPower: 0,
         lasso: null,
         hasThrown: false,
     }
@@ -67,9 +80,14 @@ const bull = {
     runAwayTimer: 0,
 };
 
-// Particles for effects
+// Particles
 let particles = [];
 let dustParticles = [];
+let ropeSegments = [];
+
+// Constants
+const MAX_DRAG_DISTANCE = 120;
+const MIN_POWER_THRESHOLD = 0.15;
 
 // ============ INITIALIZATION ============
 function init() {
@@ -89,64 +107,45 @@ function setupCanvas() {
     canvasWidth = rect.width;
     canvasHeight = rect.height;
 
-    // Set actual canvas dimensions
     canvas.width = canvasWidth * window.devicePixelRatio;
     canvas.height = canvasHeight * window.devicePixelRatio;
-
-    // Scale for retina
     ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
 
-    // CSS dimensions
     canvas.style.width = canvasWidth + 'px';
     canvas.style.height = canvasHeight + 'px';
 
-    // Position entities
     positionEntities();
 }
 
 function positionEntities() {
-    // Players at bottom
-    players.dad.x = canvasWidth * 0.2;
-    players.dad.y = canvasHeight * 0.85;
+    players.dad.x = canvasWidth * 0.15;
+    players.dad.y = canvasHeight * 0.82;
 
-    players.son.x = canvasWidth * 0.8;
-    players.son.y = canvasHeight * 0.85;
+    players.son.x = canvasWidth * 0.85;
+    players.son.y = canvasHeight * 0.82;
 
-    // Bull in the middle-upper area
     bull.x = canvasWidth * 0.5;
     bull.baseY = canvasHeight * 0.35;
     bull.y = bull.baseY;
 }
 
 function setupEventListeners() {
-    window.addEventListener('resize', () => {
-        setupCanvas();
-    });
+    window.addEventListener('resize', setupCanvas);
 
-    // Start button
-    document.getElementById('start-btn').addEventListener('click', startGame);
+    // Start buttons
+    document.getElementById('start-btn').addEventListener('click', () => startGame('local'));
+    document.getElementById('online-btn')?.addEventListener('click', () => startGame('online'));
 
-    // Control zones
-    const dadZone = document.getElementById('dad-control');
-    const sonZone = document.getElementById('son-control');
+    // Canvas touch/mouse for aiming
+    canvas.addEventListener('touchstart', handleTouchStart, { passive: false });
+    canvas.addEventListener('touchmove', handleTouchMove, { passive: false });
+    canvas.addEventListener('touchend', handleTouchEnd, { passive: false });
+    canvas.addEventListener('touchcancel', handleTouchEnd, { passive: false });
 
-    // Touch events
-    dadZone.addEventListener('touchstart', (e) => { e.preventDefault(); startCharge('dad'); }, { passive: false });
-    dadZone.addEventListener('touchend', (e) => { e.preventDefault(); releaseCharge('dad'); }, { passive: false });
-    dadZone.addEventListener('touchcancel', (e) => { e.preventDefault(); releaseCharge('dad'); }, { passive: false });
-
-    sonZone.addEventListener('touchstart', (e) => { e.preventDefault(); startCharge('son'); }, { passive: false });
-    sonZone.addEventListener('touchend', (e) => { e.preventDefault(); releaseCharge('son'); }, { passive: false });
-    sonZone.addEventListener('touchcancel', (e) => { e.preventDefault(); releaseCharge('son'); }, { passive: false });
-
-    // Mouse events for desktop
-    dadZone.addEventListener('mousedown', () => startCharge('dad'));
-    dadZone.addEventListener('mouseup', () => releaseCharge('dad'));
-    dadZone.addEventListener('mouseleave', () => { if (players.dad.isCharging) releaseCharge('dad'); });
-
-    sonZone.addEventListener('mousedown', () => startCharge('son'));
-    sonZone.addEventListener('mouseup', () => releaseCharge('son'));
-    sonZone.addEventListener('mouseleave', () => { if (players.son.isCharging) releaseCharge('son'); });
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mouseleave', handleMouseUp);
 
     // Other buttons
     document.getElementById('next-round-btn').addEventListener('click', () => {
@@ -158,6 +157,9 @@ function setupEventListeners() {
     });
 
     document.getElementById('rematch-btn').addEventListener('click', () => {
+        if (isMultiplayer) {
+            sendMessage({ type: 'rematch' });
+        }
         resetGame();
         showScreen('game-screen');
         setTimeout(() => {
@@ -167,44 +169,404 @@ function setupEventListeners() {
     });
 
     document.getElementById('menu-btn').addEventListener('click', () => {
+        if (socket) {
+            socket.close();
+            socket = null;
+        }
+        isMultiplayer = false;
         resetGame();
         showScreen('title-screen');
     });
 
-    // Tutorial
     document.getElementById('tutorial-ok')?.addEventListener('click', () => {
         document.getElementById('tutorial-overlay').classList.remove('active');
         startCountdown();
     });
+
+    // Copy room code
+    document.getElementById('copy-code-btn')?.addEventListener('click', () => {
+        navigator.clipboard.writeText(roomId);
+        document.getElementById('copy-code-btn').textContent = 'Copied!';
+        setTimeout(() => {
+            document.getElementById('copy-code-btn').textContent = 'Copy';
+        }, 2000);
+    });
+
+    // Join room
+    document.getElementById('join-room-btn')?.addEventListener('click', () => {
+        const code = document.getElementById('room-code-input').value.trim().toUpperCase();
+        if (code.length === 4) {
+            joinRoom(code);
+        }
+    });
+}
+
+// ============ TOUCH/MOUSE HANDLERS (Angry Birds Style) ============
+function getPlayerFromPosition(x, y) {
+    const dadDist = Math.sqrt(Math.pow(x - players.dad.x, 2) + Math.pow(y - players.dad.y, 2));
+    const sonDist = Math.sqrt(Math.pow(x - players.son.x, 2) + Math.pow(y - players.son.y, 2));
+
+    // Check if touch is in the lower portion of screen (control area)
+    if (y < canvasHeight * 0.6) return null;
+
+    // In multiplayer, only control your assigned player
+    if (isMultiplayer) {
+        if (playerId === 'dad' && x < canvasWidth / 2) return 'dad';
+        if (playerId === 'son' && x > canvasWidth / 2) return 'son';
+        return null;
+    }
+
+    // Local: left half = dad, right half = son
+    if (x < canvasWidth / 2) return 'dad';
+    return 'son';
+}
+
+function handleTouchStart(e) {
+    e.preventDefault();
+    if (game.state !== 'playing') return;
+
+    for (let touch of e.changedTouches) {
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        const playerKey = getPlayerFromPosition(x, y);
+        if (playerKey && !players[playerKey].hasThrown) {
+            startDrag(playerKey, x, y, touch.identifier);
+        }
+    }
+}
+
+function handleTouchMove(e) {
+    e.preventDefault();
+    if (game.state !== 'playing') return;
+
+    for (let touch of e.changedTouches) {
+        const rect = canvas.getBoundingClientRect();
+        const x = touch.clientX - rect.left;
+        const y = touch.clientY - rect.top;
+
+        ['dad', 'son'].forEach(key => {
+            if (players[key].isDragging && players[key].touchId === touch.identifier) {
+                updateDrag(key, x, y);
+            }
+        });
+    }
+}
+
+function handleTouchEnd(e) {
+    e.preventDefault();
+
+    for (let touch of e.changedTouches) {
+        ['dad', 'son'].forEach(key => {
+            if (players[key].isDragging && players[key].touchId === touch.identifier) {
+                releaseDrag(key);
+            }
+        });
+    }
+}
+
+function handleMouseDown(e) {
+    if (game.state !== 'playing') return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    const playerKey = getPlayerFromPosition(x, y);
+    if (playerKey && !players[playerKey].hasThrown) {
+        startDrag(playerKey, x, y, 'mouse');
+    }
+}
+
+function handleMouseMove(e) {
+    if (game.state !== 'playing') return;
+
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+
+    ['dad', 'son'].forEach(key => {
+        if (players[key].isDragging && players[key].touchId === 'mouse') {
+            updateDrag(key, x, y);
+        }
+    });
+}
+
+function handleMouseUp(e) {
+    ['dad', 'son'].forEach(key => {
+        if (players[key].isDragging && players[key].touchId === 'mouse') {
+            releaseDrag(key);
+        }
+    });
+}
+
+// ============ DRAG MECHANICS ============
+function startDrag(playerKey, x, y, touchId) {
+    const player = players[playerKey];
+    player.isDragging = true;
+    player.touchId = touchId;
+    player.dragStart = { x: player.x, y: player.y - 50 };
+    player.dragCurrent = { x, y };
+    vibrate(20);
+}
+
+function updateDrag(playerKey, x, y) {
+    const player = players[playerKey];
+    player.dragCurrent = { x, y };
+
+    // Calculate pull-back vector (opposite of drag direction)
+    const dx = player.dragStart.x - x;
+    const dy = player.dragStart.y - y;
+
+    // Clamp distance
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const clampedDist = Math.min(dist, MAX_DRAG_DISTANCE);
+
+    // Calculate aim angle and power
+    player.aimAngle = Math.atan2(dy, dx);
+    player.aimPower = clampedDist / MAX_DRAG_DISTANCE;
+
+    // Send to opponent in multiplayer
+    if (isMultiplayer && playerKey === playerId) {
+        sendMessage({
+            type: 'aim',
+            angle: player.aimAngle,
+            power: player.aimPower,
+        });
+    }
+}
+
+function releaseDrag(playerKey) {
+    const player = players[playerKey];
+    if (!player.isDragging) return;
+
+    player.isDragging = false;
+
+    if (player.hasThrown || game.state !== 'playing') return;
+
+    // Check minimum power
+    if (player.aimPower < MIN_POWER_THRESHOLD) {
+        player.aimPower = 0;
+        return;
+    }
+
+    player.hasThrown = true;
+    throwLasso(player, playerKey);
+    vibrate(80);
+
+    // Send throw to opponent
+    if (isMultiplayer && playerKey === playerId) {
+        sendMessage({
+            type: 'throw',
+            angle: player.aimAngle,
+            power: player.aimPower,
+        });
+    }
+}
+
+// ============ LASSO PHYSICS ============
+function throwLasso(player, playerKey) {
+    const power = player.aimPower;
+    const angle = player.aimAngle;
+
+    // Calculate velocity based on pull-back
+    const speed = 8 + power * 12;
+    const vx = Math.cos(angle) * speed;
+    const vy = Math.sin(angle) * speed;
+
+    player.lasso = {
+        x: player.x,
+        y: player.y - 50,
+        vx: vx,
+        vy: vy,
+        gravity: 0.3,
+        power: power,
+        radius: 20 + power * 25,
+        rotation: 0,
+        rotationSpeed: 0.3 + power * 0.3,
+        state: 'flying',
+        ropePoints: [],
+        time: 0,
+    };
+
+    // Initialize rope
+    for (let i = 0; i < 20; i++) {
+        player.lasso.ropePoints.push({
+            x: player.x,
+            y: player.y - 50,
+            oldX: player.x,
+            oldY: player.y - 50,
+        });
+    }
+
+    // Throw particles
+    for (let i = 0; i < 12; i++) {
+        const particleAngle = angle + (Math.random() - 0.5) * 0.5;
+        particles.push({
+            x: player.x,
+            y: player.y - 50,
+            vx: Math.cos(particleAngle) * (2 + Math.random() * 3),
+            vy: Math.sin(particleAngle) * (2 + Math.random() * 3),
+            life: 1,
+            color: player.lightColor,
+            size: 3 + Math.random() * 4,
+        });
+    }
+}
+
+function updateLassoPhysics(lasso, player, playerKey) {
+    if (lasso.state !== 'flying') return;
+
+    lasso.time++;
+
+    // Apply velocity
+    lasso.x += lasso.vx;
+    lasso.y += lasso.vy;
+
+    // Apply gravity
+    lasso.vy += lasso.gravity;
+
+    // Air resistance
+    lasso.vx *= 0.99;
+    lasso.vy *= 0.99;
+
+    // Rotation
+    lasso.rotation += lasso.rotationSpeed;
+
+    // Update rope physics (verlet integration)
+    updateRopePhysics(lasso, player);
+
+    // Check bounds
+    if (lasso.y > canvasHeight + 50 || lasso.x < -50 || lasso.x > canvasWidth + 50) {
+        lasso.state = 'missed';
+        return;
+    }
+
+    // Check collision with bull
+    const dist = Math.sqrt(Math.pow(lasso.x - bull.x, 2) + Math.pow(lasso.y - bull.y, 2));
+    if (dist < lasso.radius + bull.radius && !bull.caught) {
+        bull.caught = true;
+        bull.caughtBy = player;
+        lasso.state = 'caught';
+
+        showCatchEffect(bull.x, bull.y, player.color);
+
+        // Celebration particles
+        for (let i = 0; i < 40; i++) {
+            const angle = (Math.PI * 2 / 40) * i;
+            particles.push({
+                x: bull.x,
+                y: bull.y,
+                vx: Math.cos(angle) * (4 + Math.random() * 6),
+                vy: Math.sin(angle) * (4 + Math.random() * 6),
+                life: 1,
+                color: player.lightColor,
+                size: 5 + Math.random() * 8,
+            });
+        }
+
+        vibrate(150);
+
+        // Notify opponent
+        if (isMultiplayer) {
+            sendMessage({ type: 'catch', player: playerKey });
+        }
+    }
+}
+
+function updateRopePhysics(lasso, player) {
+    const points = lasso.ropePoints;
+    const anchorX = player.x + (player === players.dad ? 15 : -15);
+    const anchorY = player.y - 55;
+
+    // First point anchored to player
+    points[0].x = anchorX;
+    points[0].y = anchorY;
+
+    // Last point attached to lasso
+    points[points.length - 1].x = lasso.x;
+    points[points.length - 1].y = lasso.y;
+
+    // Verlet integration for middle points
+    for (let i = 1; i < points.length - 1; i++) {
+        const p = points[i];
+        const vx = (p.x - p.oldX) * 0.98;
+        const vy = (p.y - p.oldY) * 0.98;
+
+        p.oldX = p.x;
+        p.oldY = p.y;
+
+        p.x += vx;
+        p.y += vy + 0.2; // Gravity
+    }
+
+    // Constraint iterations
+    for (let iter = 0; iter < 3; iter++) {
+        for (let i = 0; i < points.length - 1; i++) {
+            const p1 = points[i];
+            const p2 = points[i + 1];
+
+            const dx = p2.x - p1.x;
+            const dy = p2.y - p1.y;
+            const dist = Math.sqrt(dx * dx + dy * dy);
+            const targetDist = 15;
+
+            if (dist > 0) {
+                const diff = (dist - targetDist) / dist;
+
+                if (i === 0) {
+                    // Anchor fixed
+                    p2.x -= dx * diff;
+                    p2.y -= dy * diff;
+                } else if (i === points.length - 2) {
+                    // End fixed
+                    p1.x += dx * diff;
+                    p1.y += dy * diff;
+                } else {
+                    p1.x += dx * diff * 0.5;
+                    p1.y += dy * diff * 0.5;
+                    p2.x -= dx * diff * 0.5;
+                    p2.y -= dy * diff * 0.5;
+                }
+            }
+        }
+    }
 }
 
 // ============ GAME FLOW ============
-function startGame() {
-    resetGame();
-    showScreen('game-screen');
+function startGame(mode) {
+    game.mode = mode;
 
-    setTimeout(() => {
-        setupCanvas();
+    if (mode === 'online') {
+        showScreen('lobby-screen');
+        connectToServer();
+    } else {
+        resetGame();
+        showScreen('game-screen');
 
-        if (game.firstPlay) {
-            game.firstPlay = false;
-            document.getElementById('tutorial-overlay').classList.add('active');
-        } else {
-            startRound();
-        }
-    }, 100);
+        setTimeout(() => {
+            setupCanvas();
+
+            if (game.firstPlay) {
+                game.firstPlay = false;
+                document.getElementById('tutorial-overlay').classList.add('active');
+            } else {
+                startRound();
+            }
+        }, 100);
+    }
 }
 
 function startRound() {
     // Reset players
     ['dad', 'son'].forEach(key => {
         const p = players[key];
-        p.power = 0;
-        p.isCharging = false;
+        p.aimPower = 0;
+        p.aimAngle = 0;
+        p.isDragging = false;
         p.lasso = null;
         p.hasThrown = false;
-        updatePowerRing(key, 0);
-        document.getElementById(`${key}-control`).classList.remove('active');
     });
 
     // Reset bull
@@ -213,18 +575,15 @@ function startRound() {
     bull.x = canvasWidth / 2;
     bull.y = bull.baseY;
     bull.direction = Math.random() > 0.5 ? 1 : -1;
-    bull.speed = 2 + game.round * 0.5; // Gets faster each round
+    bull.speed = 2 + game.round * 0.5;
     bull.runAwayTimer = 0;
 
-    // Clear particles
     particles = [];
     dustParticles = [];
 
-    // Update UI
     document.getElementById('round-display').textContent = `ROUND ${game.round}`;
     updateScoreStars();
 
-    // Start countdown
     startCountdown();
 }
 
@@ -241,7 +600,7 @@ function startCountdown() {
         if (game.countdownValue > 0) {
             text.textContent = game.countdownValue;
             text.style.animation = 'none';
-            text.offsetHeight; // Trigger reflow
+            text.offsetHeight;
             text.style.animation = 'countPop 0.4s ease-out';
 
             vibrate(50);
@@ -275,7 +634,6 @@ function endRound() {
         winner = bull.caughtBy === players.dad ? 'dad' : 'son';
     }
 
-    // Award point
     if (winner === 'dad') {
         game.dadScore++;
         document.getElementById('round-winner').textContent = "👨 PA catches the bull!";
@@ -289,14 +647,12 @@ function endRound() {
         document.getElementById('round-result-icon').textContent = '💨';
     }
 
-    // Update displays
     document.getElementById('round-dad-score').textContent = game.dadScore;
     document.getElementById('round-son-score').textContent = game.sonScore;
     updateScoreStars();
 
     vibrate(200);
 
-    // Check for game winner
     setTimeout(() => {
         if (game.dadScore >= game.maxScore) {
             game.winner = 'dad';
@@ -336,82 +692,141 @@ function resetGame() {
     updateScoreStars();
 }
 
-// ============ CONTROLS ============
-function startCharge(playerKey) {
-    if (game.state !== 'playing') return;
+// ============ MULTIPLAYER ============
+function connectToServer() {
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const wsUrl = `${protocol}//${window.location.host}/ws`;
 
-    const player = players[playerKey];
-    if (player.hasThrown) return;
+    // For development/testing, use a simple signaling approach
+    // In production, this would connect to a real WebSocket server
 
-    player.isCharging = true;
-    player.chargeStart = Date.now();
-    player.power = 0;
+    document.getElementById('room-status').textContent = 'Connecting...';
 
-    document.getElementById(`${playerKey}-control`).classList.add('active');
-    vibrate(30);
+    try {
+        socket = new WebSocket(wsUrl);
+
+        socket.onopen = () => {
+            sendMessage({ type: 'create' });
+        };
+
+        socket.onmessage = (event) => {
+            const data = JSON.parse(event.data);
+            handleServerMessage(data);
+        };
+
+        socket.onerror = (error) => {
+            console.error('WebSocket error:', error);
+            document.getElementById('room-status').textContent = 'Connection failed. Using local mode.';
+            showFallbackLocalMode();
+        };
+
+        socket.onclose = () => {
+            if (isMultiplayer && game.state === 'playing') {
+                document.getElementById('room-status').textContent = 'Opponent disconnected';
+                showScreen('lobby-screen');
+            }
+        };
+    } catch (e) {
+        console.error('WebSocket not available:', e);
+        showFallbackLocalMode();
+    }
 }
 
-function releaseCharge(playerKey) {
-    const player = players[playerKey];
-    if (!player.isCharging) return;
+function showFallbackLocalMode() {
+    // If WebSocket fails, show message and allow local play
+    setTimeout(() => {
+        document.getElementById('room-status').innerHTML = `
+            <p>Online mode requires a WebSocket server.</p>
+            <p>Play locally instead?</p>
+            <button onclick="startGame('local')" class="btn">Play Local</button>
+        `;
+    }, 1000);
+}
 
-    player.isCharging = false;
-    document.getElementById(`${playerKey}-control`).classList.remove('active');
-
-    if (player.hasThrown || game.state !== 'playing') return;
-
-    // Minimum power threshold
-    if (player.power < 0.1) {
-        player.power = 0;
-        updatePowerRing(playerKey, 0);
+function joinRoom(code) {
+    if (!socket || socket.readyState !== WebSocket.OPEN) {
+        alert('Not connected to server');
         return;
     }
 
-    player.hasThrown = true;
-    throwLasso(player);
-    vibrate(80);
+    sendMessage({ type: 'join', room: code });
 }
 
-function throwLasso(player) {
-    const power = player.power;
-
-    player.lasso = {
-        x: player.x,
-        y: player.y - 50,
-        startX: player.x,
-        startY: player.y - 50,
-        targetX: bull.x,
-        targetY: bull.y,
-        power: power,
-        speed: 10 + power * 8,
-        radius: 25 + power * 20,
-        rotation: 0,
-        progress: 0,
-        state: 'flying', // flying, missed, caught
-        trail: [],
-    };
-
-    // Add throw particles
-    for (let i = 0; i < 10; i++) {
-        particles.push({
-            x: player.x,
-            y: player.y - 50,
-            vx: (Math.random() - 0.5) * 5,
-            vy: (Math.random() - 0.5) * 5,
-            life: 1,
-            color: player.lightColor,
-            size: 3 + Math.random() * 4,
-        });
+function sendMessage(data) {
+    if (socket && socket.readyState === WebSocket.OPEN) {
+        socket.send(JSON.stringify(data));
     }
 }
 
-function updatePowerRing(playerKey, power) {
-    const ring = document.getElementById(`${playerKey}-ring-fill`);
-    if (ring) {
-        const circumference = 283;
-        const offset = circumference * (1 - power);
-        ring.style.strokeDashoffset = offset;
+function handleServerMessage(data) {
+    switch (data.type) {
+        case 'room_created':
+            roomId = data.room;
+            playerId = 'dad';
+            document.getElementById('room-code-display').textContent = roomId;
+            document.getElementById('room-status').textContent = 'Waiting for opponent...';
+            document.querySelector('.room-code-section').style.display = 'block';
+            break;
+
+        case 'room_joined':
+            roomId = data.room;
+            playerId = 'son';
+            opponentConnected = true;
+            document.getElementById('room-status').textContent = 'Joined! Starting game...';
+            startMultiplayerGame();
+            break;
+
+        case 'opponent_joined':
+            opponentConnected = true;
+            document.getElementById('room-status').textContent = 'Opponent joined! Starting...';
+            startMultiplayerGame();
+            break;
+
+        case 'opponent_aim':
+            const oppKey = playerId === 'dad' ? 'son' : 'dad';
+            players[oppKey].aimAngle = data.angle;
+            players[oppKey].aimPower = data.power;
+            players[oppKey].isDragging = true;
+            break;
+
+        case 'opponent_throw':
+            const throwKey = playerId === 'dad' ? 'son' : 'dad';
+            players[throwKey].aimAngle = data.angle;
+            players[throwKey].aimPower = data.power;
+            players[throwKey].hasThrown = true;
+            throwLasso(players[throwKey], throwKey);
+            break;
+
+        case 'sync':
+            // Sync game state from host
+            if (data.bull) {
+                bull.x = data.bull.x;
+                bull.y = data.bull.y;
+                bull.direction = data.bull.direction;
+            }
+            break;
+
+        case 'opponent_left':
+            opponentConnected = false;
+            alert('Opponent disconnected');
+            showScreen('lobby-screen');
+            break;
+
+        case 'error':
+            alert(data.message);
+            break;
     }
+}
+
+function startMultiplayerGame() {
+    isMultiplayer = true;
+    resetGame();
+    showScreen('game-screen');
+
+    setTimeout(() => {
+        setupCanvas();
+        startRound();
+    }, 500);
 }
 
 // ============ GAME LOOP ============
@@ -424,24 +839,12 @@ function gameLoop() {
 function update() {
     if (game.state !== 'playing' && game.state !== 'countdown') return;
 
-    // Update charging
-    ['dad', 'son'].forEach(key => {
-        const player = players[key];
-        if (player.isCharging && !player.hasThrown) {
-            const elapsed = Date.now() - player.chargeStart;
-            player.power = Math.min(1, elapsed / 1200);
-            updatePowerRing(key, player.power);
-        }
-    });
-
     if (game.state !== 'playing') return;
 
     // Update bull
     if (!bull.caught) {
-        // Horizontal movement
         bull.x += bull.speed * bull.direction;
 
-        // Bounce off edges
         const margin = 60;
         if (bull.x > canvasWidth - margin) {
             bull.x = canvasWidth - margin;
@@ -451,11 +854,10 @@ function update() {
             bull.direction = 1;
         }
 
-        // Bobbing animation
         bull.bobOffset += 0.15;
         bull.y = bull.baseY + Math.sin(bull.bobOffset) * 8;
 
-        // Create dust
+        // Dust
         if (Math.random() < 0.3) {
             dustParticles.push({
                 x: bull.x - bull.direction * 20,
@@ -467,10 +869,18 @@ function update() {
             });
         }
 
-        // Run away timer - end round if both missed
+        // Run away timer
         bull.runAwayTimer++;
         if (bull.runAwayTimer > 300 && players.dad.hasThrown && players.son.hasThrown) {
             endRound();
+        }
+
+        // Sync bull position in multiplayer (host only)
+        if (isMultiplayer && playerId === 'dad' && bull.runAwayTimer % 30 === 0) {
+            sendMessage({
+                type: 'sync',
+                bull: { x: bull.x, y: bull.y, direction: bull.direction }
+            });
         }
     }
 
@@ -478,7 +888,7 @@ function update() {
     ['dad', 'son'].forEach(key => {
         const player = players[key];
         if (player.lasso && player.lasso.state === 'flying') {
-            updateLasso(player.lasso, player);
+            updateLassoPhysics(player.lasso, player, key);
         }
     });
 
@@ -486,8 +896,8 @@ function update() {
     particles = particles.filter(p => {
         p.x += p.vx;
         p.y += p.vy;
-        p.life -= 0.03;
-        p.vy += 0.1;
+        p.life -= 0.025;
+        p.vy += 0.15;
         return p.life > 0;
     });
 
@@ -508,100 +918,52 @@ function update() {
     }
 }
 
-function updateLasso(lasso, player) {
-    lasso.rotation += 0.4;
-    lasso.progress += 0.04 * lasso.speed / 10;
-
-    // Store trail
-    lasso.trail.push({ x: lasso.x, y: lasso.y });
-    if (lasso.trail.length > 15) lasso.trail.shift();
-
-    if (lasso.progress < 1) {
-        // Fly toward target
-        const t = easeOutQuad(lasso.progress);
-        lasso.x = lasso.startX + (lasso.targetX - lasso.startX) * t;
-        lasso.y = lasso.startY + (lasso.targetY - lasso.startY) * t;
-
-        // Arc upward
-        const arc = Math.sin(lasso.progress * Math.PI) * 50 * lasso.power;
-        lasso.y -= arc;
-
-        // Check collision
-        const dist = Math.sqrt(Math.pow(lasso.x - bull.x, 2) + Math.pow(lasso.y - bull.y, 2));
-        if (dist < lasso.radius + bull.radius && !bull.caught) {
-            bull.caught = true;
-            bull.caughtBy = player;
-            lasso.state = 'caught';
-
-            // Catch effect
-            showCatchEffect(bull.x, bull.y, player.color);
-
-            // Celebration particles
-            for (let i = 0; i < 30; i++) {
-                const angle = (Math.PI * 2 / 30) * i;
-                particles.push({
-                    x: bull.x,
-                    y: bull.y,
-                    vx: Math.cos(angle) * (3 + Math.random() * 5),
-                    vy: Math.sin(angle) * (3 + Math.random() * 5),
-                    life: 1,
-                    color: player.lightColor,
-                    size: 4 + Math.random() * 6,
-                });
-            }
-
-            vibrate(150);
-        }
-    } else {
-        // Missed
-        lasso.state = 'missed';
-    }
-}
-
-function easeOutQuad(t) {
-    return t * (2 - t);
-}
-
 // ============ RENDERING ============
 function render() {
     if (!ctx || canvasWidth === 0) return;
 
     ctx.clearRect(0, 0, canvasWidth, canvasHeight);
 
-    // Draw arena elements
     drawArena();
-
-    // Draw dust particles (behind everything)
     drawDustParticles();
-
-    // Draw bull
     drawBull();
 
-    // Draw players
-    drawPlayer(players.dad, true);
-    drawPlayer(players.son, false);
-
-    // Draw lassos
+    // Draw trajectory previews for aiming players
     ['dad', 'son'].forEach(key => {
         const player = players[key];
-        if (player.lasso) {
-            drawLasso(player.lasso, player);
+        if (player.isDragging && !player.hasThrown) {
+            drawTrajectoryPreview(player, key);
         }
     });
 
-    // Draw particles (on top)
+    drawPlayer(players.dad, true);
+    drawPlayer(players.son, false);
+
+    // Draw lassos with rope physics
+    ['dad', 'son'].forEach(key => {
+        const player = players[key];
+        if (player.lasso) {
+            drawRopeLasso(player.lasso, player);
+        }
+    });
+
     drawParticles();
+
+    // Draw aim indicators
+    ['dad', 'son'].forEach(key => {
+        const player = players[key];
+        if (player.isDragging && !player.hasThrown) {
+            drawAimIndicator(player, key);
+        }
+    });
 }
 
 function drawArena() {
-    // Ground line
     const groundY = canvasHeight * 0.6;
 
-    // Fence
     ctx.strokeStyle = '#8B4513';
     ctx.lineWidth = 6;
 
-    // Fence rails
     ctx.beginPath();
     ctx.moveTo(0, groundY - 20);
     ctx.lineTo(canvasWidth, groundY - 20);
@@ -612,13 +974,11 @@ function drawArena() {
     ctx.lineTo(canvasWidth, groundY - 50);
     ctx.stroke();
 
-    // Fence posts
     ctx.fillStyle = '#5D4037';
     for (let x = 30; x < canvasWidth; x += 80) {
         ctx.fillRect(x - 5, groundY - 70, 10, 70);
     }
 
-    // Arena markings
     ctx.strokeStyle = 'rgba(255, 255, 255, 0.3)';
     ctx.lineWidth = 3;
     ctx.setLineDash([10, 10]);
@@ -635,12 +995,10 @@ function drawBull() {
     ctx.save();
     ctx.translate(x, y);
 
-    // Direction flip
     if (bull.direction < 0) {
         ctx.scale(-1, 1);
     }
 
-    // Running animation
     const runPhase = Math.sin(bull.bobOffset * 2);
 
     // Shadow
@@ -687,15 +1045,12 @@ function drawBull() {
     ctx.arc(46, -4, 2, 0, Math.PI * 2);
     ctx.fill();
 
-    // Legs (animated)
+    // Legs
     ctx.fillStyle = '#3D2106';
     const legOffset = runPhase * 8;
 
-    // Front legs
     ctx.fillRect(15, 20, 8, 25 + legOffset);
     ctx.fillRect(25, 20, 8, 25 - legOffset);
-
-    // Back legs
     ctx.fillRect(-25, 20, 8, 25 - legOffset);
     ctx.fillRect(-15, 20, 8, 25 + legOffset);
 
@@ -707,13 +1062,12 @@ function drawBull() {
     ctx.quadraticCurveTo(-55, 10 + runPhase * 5, -50, 25 + runPhase * 3);
     ctx.stroke();
 
-    // Tail tuft
     ctx.fillStyle = '#3D2106';
     ctx.beginPath();
     ctx.arc(-50, 28 + runPhase * 3, 8, 0, Math.PI * 2);
     ctx.fill();
 
-    // Snort effect when running
+    // Snort
     if (!bull.caught && Math.random() < 0.1) {
         ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
         ctx.beginPath();
@@ -727,7 +1081,6 @@ function drawBull() {
     if (bull.caught && bull.caughtBy) {
         ctx.save();
 
-        // Rope around bull
         ctx.strokeStyle = bull.caughtBy.lightColor;
         ctx.lineWidth = 4;
         ctx.setLineDash([8, 4]);
@@ -736,7 +1089,6 @@ function drawBull() {
         ctx.stroke();
         ctx.setLineDash([]);
 
-        // CAUGHT text
         ctx.fillStyle = bull.caughtBy.color;
         ctx.font = 'bold 24px sans-serif';
         ctx.textAlign = 'center';
@@ -745,7 +1097,7 @@ function drawBull() {
         ctx.restore();
     }
 
-    // Target indicator when playing
+    // Target indicator
     if (game.state === 'playing' && !bull.caught) {
         ctx.save();
         ctx.strokeStyle = 'rgba(255, 215, 0, 0.5)';
@@ -769,7 +1121,6 @@ function drawPlayer(player, isLeft) {
     ctx.save();
     ctx.translate(x, y);
 
-    // Face toward center
     if (!isLeft) {
         ctx.scale(-1, 1);
     }
@@ -792,13 +1143,12 @@ function drawPlayer(player, isLeft) {
     ctx.ellipse(0, 0, 8, 6, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Hat brim
+    // Hat
     ctx.fillStyle = '#5D4037';
     ctx.beginPath();
     ctx.ellipse(0, -65, 30, 8, 0, 0, Math.PI * 2);
     ctx.fill();
 
-    // Hat top
     ctx.fillRect(-12, -85, 24, 22);
     ctx.beginPath();
     ctx.arc(0, -85, 12, Math.PI, 0);
@@ -824,9 +1174,8 @@ function drawPlayer(player, isLeft) {
     ctx.arc(0, -45, 6, 0.2, Math.PI - 0.2);
     ctx.stroke();
 
-    // Arm with lasso (when charging)
-    if (player.isCharging) {
-        // Raised arm
+    // Arm with lasso when aiming
+    if (player.isDragging && !player.hasThrown) {
         ctx.fillStyle = player.color;
         ctx.beginPath();
         ctx.ellipse(20, -45, 8, 20, -0.5, 0, Math.PI * 2);
@@ -835,16 +1184,15 @@ function drawPlayer(player, isLeft) {
         // Spinning lasso above head
         ctx.save();
         ctx.translate(25, -75);
-        ctx.rotate(Date.now() / 80);
+        ctx.rotate(Date.now() / 60);
 
-        const lassoSize = 15 + player.power * 20;
+        const lassoSize = 15 + player.aimPower * 25;
         ctx.strokeStyle = '#D2B48C';
         ctx.lineWidth = 4;
         ctx.beginPath();
         ctx.arc(0, 0, lassoSize, 0, Math.PI * 2);
         ctx.stroke();
 
-        // Inner loop
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.arc(0, 0, lassoSize - 5, 0, Math.PI * 2);
@@ -862,48 +1210,194 @@ function drawPlayer(player, isLeft) {
     ctx.fillText(player.name, x, y + 30);
 }
 
-function drawLasso(lasso, player) {
+function drawAimIndicator(player, playerKey) {
+    if (player.aimPower < 0.05) return;
+
+    const startX = player.x;
+    const startY = player.y - 50;
+
+    // Draw pull-back line (slingshot style)
+    ctx.save();
+
+    // Slingshot bands
+    ctx.strokeStyle = player.lightColor;
+    ctx.lineWidth = 4;
+    ctx.lineCap = 'round';
+
+    const pullX = startX - Math.cos(player.aimAngle) * player.aimPower * MAX_DRAG_DISTANCE;
+    const pullY = startY - Math.sin(player.aimAngle) * player.aimPower * MAX_DRAG_DISTANCE;
+
+    ctx.beginPath();
+    ctx.moveTo(startX - 10, startY - 10);
+    ctx.lineTo(pullX, pullY);
+    ctx.lineTo(startX + 10, startY - 10);
+    ctx.stroke();
+
+    // Power indicator at pull point
+    const powerRadius = 15 + player.aimPower * 15;
+    ctx.fillStyle = `rgba(${player.color === '#8B4513' ? '139, 69, 19' : '37, 99, 235'}, 0.3)`;
+    ctx.beginPath();
+    ctx.arc(pullX, pullY, powerRadius, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.strokeStyle = player.lightColor;
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.arc(pullX, pullY, powerRadius, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Power percentage
+    ctx.fillStyle = 'white';
+    ctx.font = 'bold 16px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(Math.round(player.aimPower * 100) + '%', pullX, pullY);
+
+    ctx.restore();
+}
+
+function drawTrajectoryPreview(player, playerKey) {
+    if (player.aimPower < MIN_POWER_THRESHOLD) return;
+
+    const startX = player.x;
+    const startY = player.y - 50;
+    const power = player.aimPower;
+    const angle = player.aimAngle;
+
+    const speed = 8 + power * 12;
+    let vx = Math.cos(angle) * speed;
+    let vy = Math.sin(angle) * speed;
+    const gravity = 0.3;
+
+    ctx.save();
+
+    // Draw dotted trajectory
+    let x = startX;
+    let y = startY;
+
+    ctx.strokeStyle = `rgba(${player.color === '#8B4513' ? '210, 105, 30' : '96, 165, 250'}, 0.6)`;
+    ctx.setLineDash([8, 8]);
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+
+    for (let t = 0; t < 40; t++) {
+        x += vx;
+        y += vy;
+        vy += gravity;
+        vx *= 0.99;
+        vy *= 0.99;
+
+        if (y > canvasHeight || x < 0 || x > canvasWidth) break;
+
+        ctx.lineTo(x, y);
+    }
+
+    ctx.stroke();
+
+    // Draw dots along path
+    ctx.setLineDash([]);
+    x = startX;
+    y = startY;
+    vx = Math.cos(angle) * speed;
+    vy = Math.sin(angle) * speed;
+
+    for (let t = 0; t < 40; t += 5) {
+        for (let i = 0; i < 5; i++) {
+            x += vx;
+            y += vy;
+            vy += gravity;
+            vx *= 0.99;
+            vy *= 0.99;
+        }
+
+        if (y > canvasHeight || x < 0 || x > canvasWidth) break;
+
+        const alpha = 1 - (t / 40) * 0.7;
+        ctx.fillStyle = `rgba(${player.color === '#8B4513' ? '210, 105, 30' : '96, 165, 250'}, ${alpha})`;
+        ctx.beginPath();
+        ctx.arc(x, y, 4, 0, Math.PI * 2);
+        ctx.fill();
+    }
+
+    ctx.restore();
+}
+
+function drawRopeLasso(lasso, player) {
     if (lasso.state === 'missed') return;
 
     ctx.save();
 
-    // Rope trail
-    if (lasso.trail.length > 1) {
-        ctx.strokeStyle = 'rgba(210, 180, 140, 0.5)';
-        ctx.lineWidth = 3;
+    // Draw rope using physics points
+    if (lasso.ropePoints.length > 1) {
+        // Rope shadow
+        ctx.strokeStyle = 'rgba(0, 0, 0, 0.2)';
+        ctx.lineWidth = 6;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
+
         ctx.beginPath();
-        ctx.moveTo(lasso.trail[0].x, lasso.trail[0].y);
-        for (let i = 1; i < lasso.trail.length; i++) {
-            ctx.lineTo(lasso.trail[i].x, lasso.trail[i].y);
+        ctx.moveTo(lasso.ropePoints[0].x + 3, lasso.ropePoints[0].y + 3);
+        for (let i = 1; i < lasso.ropePoints.length; i++) {
+            ctx.lineTo(lasso.ropePoints[i].x + 3, lasso.ropePoints[i].y + 3);
+        }
+        ctx.stroke();
+
+        // Main rope
+        ctx.strokeStyle = '#8B7355';
+        ctx.lineWidth = 5;
+
+        ctx.beginPath();
+        ctx.moveTo(lasso.ropePoints[0].x, lasso.ropePoints[0].y);
+        for (let i = 1; i < lasso.ropePoints.length; i++) {
+            ctx.lineTo(lasso.ropePoints[i].x, lasso.ropePoints[i].y);
+        }
+        ctx.stroke();
+
+        // Rope highlight
+        ctx.strokeStyle = '#D2B48C';
+        ctx.lineWidth = 2;
+
+        ctx.beginPath();
+        ctx.moveTo(lasso.ropePoints[0].x, lasso.ropePoints[0].y - 1);
+        for (let i = 1; i < lasso.ropePoints.length; i++) {
+            ctx.lineTo(lasso.ropePoints[i].x, lasso.ropePoints[i].y - 1);
         }
         ctx.stroke();
     }
 
-    // Rope from player to lasso
-    ctx.strokeStyle = '#D2B48C';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(player.x + (player === players.dad ? 20 : -20), player.y - 60);
-    ctx.lineTo(lasso.x, lasso.y);
-    ctx.stroke();
-
-    // Lasso loop
+    // Lasso loop at the end
     ctx.save();
     ctx.translate(lasso.x, lasso.y);
     ctx.rotate(lasso.rotation);
 
-    // Outer rope
-    ctx.strokeStyle = player.lightColor;
-    ctx.lineWidth = 5;
+    // Outer glow
+    ctx.shadowColor = player.lightColor;
+    ctx.shadowBlur = 10;
+
+    // Lasso ring
+    ctx.strokeStyle = '#8B7355';
+    ctx.lineWidth = 6;
     ctx.beginPath();
     ctx.arc(0, 0, lasso.radius, 0, Math.PI * 2);
     ctx.stroke();
 
-    // Inner rope
+    ctx.shadowBlur = 0;
+
+    // Inner ring
     ctx.strokeStyle = '#D2B48C';
     ctx.lineWidth = 3;
     ctx.beginPath();
-    ctx.arc(0, 0, lasso.radius - 4, 0, Math.PI * 2);
+    ctx.arc(0, 0, lasso.radius - 3, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Player color accent
+    ctx.strokeStyle = player.lightColor;
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(0, 0, lasso.radius + 3, 0, Math.PI * 0.5);
     ctx.stroke();
 
     ctx.restore();

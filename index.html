@@ -30,13 +30,40 @@
                 </div>
             </div>
             <p class="tagline">Who's the best cowboy in the family?</p>
-            <button id="start-btn" class="btn-primary pulse">🤠 START DUEL 🤠</button>
+            <button id="start-btn" class="btn-primary pulse">🎮 LOCAL DUEL</button>
+            <button id="online-btn" class="btn-secondary">🌐 ONLINE DUEL</button>
             <div class="how-to-play">
                 <p><strong>HOW TO PLAY:</strong></p>
-                <p>👆 HOLD your zone to charge your lasso</p>
-                <p>🎯 RELEASE to throw at the bull!</p>
+                <p>👆 DRAG BACK from your cowboy to aim</p>
+                <p>🎯 RELEASE to slingshot your lasso!</p>
                 <p>🏆 First to catch 3 bulls wins!</p>
             </div>
+        </div>
+    </div>
+
+    <!-- Lobby Screen -->
+    <div id="lobby-screen" class="screen">
+        <div class="lobby-content">
+            <h1>🌐 ONLINE DUEL</h1>
+            <p id="room-status">Connecting...</p>
+
+            <div class="room-code-section" style="display: none;">
+                <p>Share this code with your opponent:</p>
+                <div class="room-code-display">
+                    <span id="room-code-display">----</span>
+                    <button id="copy-code-btn" class="btn-small">Copy</button>
+                </div>
+            </div>
+
+            <div class="join-section">
+                <p>Or join a game:</p>
+                <div class="join-form">
+                    <input type="text" id="room-code-input" placeholder="Enter code" maxlength="4" class="code-input">
+                    <button id="join-room-btn" class="btn-primary">JOIN</button>
+                </div>
+            </div>
+
+            <button class="btn-secondary" onclick="showScreen('title-screen')">← BACK</button>
         </div>
     </div>
 
@@ -68,29 +95,8 @@
         </div>
 
         <div id="game-controls">
-            <div class="control-zone dad-zone" id="dad-control">
-                <div class="zone-content">
-                    <div class="power-ring" id="dad-ring">
-                        <svg viewBox="0 0 100 100">
-                            <circle class="ring-bg" cx="50" cy="50" r="45"/>
-                            <circle class="ring-fill" cx="50" cy="50" r="45" id="dad-ring-fill"/>
-                        </svg>
-                        <span class="lasso-icon">🪢</span>
-                    </div>
-                    <span class="zone-label">PA's LASSO</span>
-                </div>
-            </div>
-            <div class="control-zone son-zone" id="son-control">
-                <div class="zone-content">
-                    <div class="power-ring" id="son-ring">
-                        <svg viewBox="0 0 100 100">
-                            <circle class="ring-bg" cx="50" cy="50" r="45"/>
-                            <circle class="ring-fill" cx="50" cy="50" r="45" id="son-ring-fill"/>
-                        </svg>
-                        <span class="lasso-icon">🪢</span>
-                    </div>
-                    <span class="zone-label">JUNIOR's LASSO</span>
-                </div>
+            <div class="control-hint">
+                <span class="hint-text">👆 TAP & DRAG on the arena to aim your lasso!</span>
             </div>
         </div>
     </div>
@@ -143,20 +149,35 @@
     <!-- Tutorial Overlay (first time) -->
     <div id="tutorial-overlay" class="overlay">
         <div class="tutorial-content">
-            <h2>🤠 GET READY! 🤠</h2>
-            <div class="tutorial-step">
-                <div class="tutorial-icon">👇</div>
-                <p>Hold your control zone to charge</p>
+            <h2>🤠 SLINGSHOT LASSO! 🤠</h2>
+            <div class="tutorial-diagram">
+                <div class="diagram-step">
+                    <div class="diagram-visual">
+                        <div class="cowboy-icon">🤠</div>
+                        <div class="drag-arrow">←</div>
+                        <div class="finger-icon">👆</div>
+                    </div>
+                    <p>DRAG BACK from your cowboy</p>
+                </div>
+                <div class="diagram-step">
+                    <div class="diagram-visual">
+                        <div class="trajectory-dots">• • • →</div>
+                        <div class="target-icon">🐂</div>
+                    </div>
+                    <p>AIM at the running bull</p>
+                </div>
+                <div class="diagram-step">
+                    <div class="diagram-visual">
+                        <div class="lasso-flying">🪢💨</div>
+                    </div>
+                    <p>RELEASE to throw!</p>
+                </div>
             </div>
-            <div class="tutorial-step">
-                <div class="tutorial-icon">🪢</div>
-                <p>Release to throw your lasso</p>
+            <div class="tutorial-tips">
+                <p>💡 Pull back MORE = throw HARDER</p>
+                <p>🎯 Watch the dotted line to aim</p>
             </div>
-            <div class="tutorial-step">
-                <div class="tutorial-icon">🐂</div>
-                <p>Catch the running bull!</p>
-            </div>
-            <button id="tutorial-ok" class="btn-primary">GOT IT!</button>
+            <button id="tutorial-ok" class="btn-primary">LET'S DUEL!</button>
         </div>
     </div>
 

@@ -159,16 +159,16 @@ body {
     color: var(--wood);
     font-size: 1rem;
     font-style: italic;
-    margin-bottom: 25px;
+    margin-bottom: 20px;
 }
 
 .btn-primary {
     background: linear-gradient(180deg, var(--gold) 0%, var(--gold-dark) 100%);
     border: none;
     color: var(--wood);
-    font-size: 1.3rem;
+    font-size: 1.2rem;
     font-weight: 800;
-    padding: 18px 40px;
+    padding: 16px 36px;
     border-radius: 50px;
     cursor: pointer;
     box-shadow:
@@ -177,6 +177,10 @@ body {
     transition: all 0.1s ease;
     text-transform: uppercase;
     letter-spacing: 1px;
+    display: block;
+    width: 100%;
+    max-width: 280px;
+    margin: 8px auto;
 }
 
 .btn-primary:active {
@@ -199,16 +203,30 @@ body {
     background: white;
     border: 3px solid var(--wood);
     color: var(--wood);
-    font-size: 1.1rem;
+    font-size: 1rem;
     font-weight: 700;
-    padding: 14px 30px;
+    padding: 12px 28px;
     border-radius: 50px;
     cursor: pointer;
-    margin-top: 10px;
+    display: block;
+    width: 100%;
+    max-width: 280px;
+    margin: 8px auto;
+}
+
+.btn-small {
+    background: var(--gold);
+    border: none;
+    color: var(--wood);
+    font-size: 0.9rem;
+    font-weight: 700;
+    padding: 8px 16px;
+    border-radius: 20px;
+    cursor: pointer;
 }
 
 .how-to-play {
-    margin-top: 30px;
+    margin-top: 25px;
     background: rgba(255,255,255,0.9);
     border-radius: 15px;
     padding: 15px 20px;
@@ -223,6 +241,99 @@ body {
 
 .how-to-play strong {
     color: var(--dad-color);
+}
+
+/* ============ LOBBY SCREEN ============ */
+#lobby-screen {
+    background: linear-gradient(180deg, var(--sky-top) 0%, var(--sky-bottom) 40%, var(--arena-sand) 40%, var(--arena-dark) 100%);
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.lobby-content {
+    background: white;
+    border-radius: 25px;
+    padding: 30px;
+    max-width: 350px;
+    width: 100%;
+    text-align: center;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+}
+
+.lobby-content h1 {
+    color: var(--wood);
+    font-size: 1.8rem;
+    margin-bottom: 15px;
+}
+
+#room-status {
+    color: var(--wood);
+    font-size: 1rem;
+    margin-bottom: 20px;
+}
+
+.room-code-section {
+    margin: 20px 0;
+    padding: 20px;
+    background: #f5f5f5;
+    border-radius: 15px;
+}
+
+.room-code-section p {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.room-code-display {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+}
+
+.room-code-display span {
+    font-size: 2.5rem;
+    font-weight: 900;
+    color: var(--wood);
+    letter-spacing: 8px;
+    font-family: monospace;
+}
+
+.join-section {
+    margin: 20px 0;
+    padding-top: 20px;
+    border-top: 2px dashed #ddd;
+}
+
+.join-section p {
+    color: #666;
+    font-size: 0.9rem;
+    margin-bottom: 10px;
+}
+
+.join-form {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+.code-input {
+    width: 120px;
+    padding: 12px;
+    font-size: 1.5rem;
+    font-weight: 700;
+    text-align: center;
+    border: 3px solid var(--wood);
+    border-radius: 10px;
+    text-transform: uppercase;
+    letter-spacing: 4px;
+}
+
+.code-input:focus {
+    outline: none;
+    border-color: var(--gold);
 }
 
 /* ============ GAME SCREEN ============ */
@@ -296,6 +407,7 @@ body {
     position: relative;
     overflow: hidden;
     min-height: 200px;
+    cursor: crosshair;
 }
 
 #game-canvas {
@@ -330,19 +442,35 @@ body {
     100% { transform: translate(-50%, -50%) scale(3); opacity: 0; }
 }
 
-/* ============ GAME CONTROLS ============ */
+/* ============ GAME CONTROLS (Simplified hint) ============ */
 #game-controls {
     display: flex;
     width: 100%;
     flex-shrink: 0;
-    height: 140px;
+    height: 60px;
     position: relative;
     z-index: 20;
+    background: linear-gradient(180deg, rgba(93, 64, 55, 0.95) 0%, rgba(139, 69, 19, 0.95) 100%);
+    align-items: center;
+    justify-content: center;
 }
 
+.control-hint {
+    text-align: center;
+    padding: 10px;
+}
+
+.hint-text {
+    color: white;
+    font-size: 0.9rem;
+    font-weight: 600;
+    opacity: 0.9;
+}
+
+/* Legacy control zones - keeping for compatibility but hidden */
 .control-zone {
     flex: 1;
-    display: flex;
+    display: none;
     align-items: center;
     justify-content: center;
     cursor: pointer;
@@ -358,23 +486,6 @@ body {
 
 .son-zone {
     background: linear-gradient(135deg, rgba(37, 99, 235, 0.9) 0%, rgba(59, 130, 246, 0.9) 100%);
-}
-
-.control-zone::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    background: rgba(255,255,255,0.2);
-    opacity: 0;
-    transition: opacity 0.2s;
-}
-
-.control-zone.active::before,
-.control-zone:active::before {
-    opacity: 1;
 }
 
 .zone-content {
@@ -420,15 +531,6 @@ body {
     left: 50%;
     transform: translate(-50%, -50%);
     font-size: 28px;
-}
-
-.control-zone.active .lasso-icon {
-    animation: spin 0.3s linear infinite;
-}
-
-@keyframes spin {
-    from { transform: translate(-50%, -50%) rotate(0deg); }
-    to { transform: translate(-50%, -50%) rotate(360deg); }
 }
 
 .zone-label {
@@ -599,19 +701,86 @@ body {
     100% { transform: scale(1); opacity: 1; }
 }
 
+/* ============ TUTORIAL (Slingshot Style) ============ */
 .tutorial-content {
     background: white;
     border-radius: 25px;
-    padding: 30px;
-    max-width: 320px;
+    padding: 25px;
+    max-width: 340px;
     text-align: center;
 }
 
 .tutorial-content h2 {
     color: var(--wood);
     margin-bottom: 20px;
+    font-size: 1.4rem;
 }
 
+.tutorial-diagram {
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 20px;
+}
+
+.diagram-step {
+    background: #f5f5f5;
+    border-radius: 15px;
+    padding: 15px;
+}
+
+.diagram-visual {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    font-size: 2rem;
+    margin-bottom: 8px;
+}
+
+.cowboy-icon, .finger-icon, .target-icon, .lasso-flying {
+    font-size: 2rem;
+}
+
+.drag-arrow {
+    font-size: 1.5rem;
+    color: var(--dad-color);
+    animation: arrowPulse 1s ease-in-out infinite;
+}
+
+@keyframes arrowPulse {
+    0%, 100% { transform: translateX(0); opacity: 1; }
+    50% { transform: translateX(-10px); opacity: 0.5; }
+}
+
+.trajectory-dots {
+    font-size: 1.2rem;
+    color: var(--son-light);
+    letter-spacing: 3px;
+}
+
+.diagram-step p {
+    color: var(--wood);
+    font-size: 0.9rem;
+    font-weight: 600;
+    margin: 0;
+}
+
+.tutorial-tips {
+    background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+    border-radius: 12px;
+    padding: 12px;
+    margin-bottom: 15px;
+}
+
+.tutorial-tips p {
+    color: var(--wood);
+    font-size: 0.85rem;
+    font-weight: 600;
+    margin: 4px 0;
+}
+
+/* Legacy tutorial styles */
 .tutorial-step {
     display: flex;
     align-items: center;
@@ -660,22 +829,26 @@ body {
 /* ============ RESPONSIVE ============ */
 @media (max-height: 600px) {
     #game-controls {
-        height: 110px;
+        height: 50px;
     }
 
-    .power-ring {
-        width: 55px;
-        height: 55px;
-    }
-
-    .lasso-icon {
-        font-size: 22px;
+    .hint-text {
+        font-size: 0.8rem;
     }
 
     .character-icon {
         width: 60px;
         height: 60px;
         font-size: 35px;
+    }
+
+    .tutorial-content {
+        padding: 20px;
+        max-width: 300px;
+    }
+
+    .diagram-visual {
+        font-size: 1.5rem;
     }
 }
 
